@@ -5,7 +5,7 @@
 
 * clear the workspace and set working directory
 clear
-cd "\\Client\C$\Users\C:\Users\cugur\OneDrive - Johns Hopkins University\SAIS\2023 Spring - DC\Programming\Feldstein Horioka"
+cd "\\Client\C$\Users\cugur\OneDrive - Johns Hopkins University\SAIS\2023 Spring - DC\Programming\Feldstein Horioka"
 
 * import the desired Excel file
 import delimited "Data Input\WEOOct2022all.xls"
@@ -103,67 +103,78 @@ save "Code\FH_cleandata.dta", replace
 	
 ************** Running Regressions for each Country Group and Period Combination ****************
 
-clear
-use "Code\FH_cleandata.dta"
+use "Code\FH_cleandata.dta", clear
 
 *** Part 1: the Original F-H Analysis Method using Averages Per Period ****
 
+* first, let's create a matrix to store all the relevant regression outputs
+mat AvgResults = J(12,7,.)
+mat rownames AvgResults = g1p1 g1p2 g1p3 g1p4 g2p1 g2p2 g2p3 g2p4 g3p1 g3p2 g3p3 g3p4
+mat colnames AvgResults = "Country Group" "Time Period" "Savings Coefficient" "Savings s.e." "Constant Coefficient" "Constant s.e." "R-squared"
+matlist AvgResults
+
+* now, let's run a loop for each country group and time period combination, putting relevant regression outputs into our results matrix
 forvalues j = 1/3{ // specifying loops for country groups
 	forvalues i = 1/4 { // specifying loops for time periods
+		local row = `i' + 4*(`j'-1)
 		preserve
 			keep if group`j' == 1
 			keep if period`i' == 1
 			bysort country: egen avg_investment = mean(investment)
 			bysort country: egen avg_savings = mean(savings)
 			reg avg_investment avg_savings
-			mat avgG`j'P`i' = r(table)\ (e(r2),0)
+			mat R = r(table)
+			mat AvgResults[`row',1] = `j' // country group
+			mat AvgResults[`row',2] = `i' // time period
+			mat AvgResults[`row',3] = R[1,1] // savings coef
+			mat AvgResults[`row',4] = R[2,1] // savings s.e.
+			mat AvgResults[`row',5] = R[1,2] // constant coef
+			mat AvgResults[`row',6] = R[2,2] // constant s.e.
+			mat AvgResults[`row',7] = e(r2) // r-squared
 		restore
 	}
 }
 
 
-* now let's put our results in an excel, focusing the regression coefficients, standard errors and r-squared values *
-
+* now let's put our results in an excel
 putexcel set "Data Output\FHcoefficients.xls", sheet("Averages") replace
-putexcel A1 = "Country Group" B1 = "Time Period" C1 = "Savings Coefficient" D1 = "Savings s.e." E1 = "Constant Coefficient" ///
-	F1 = "Constant s.e." G1 = "R-squared"
-
-forvalues j = 1/3{ // specifying loops for country groups
-	forvalues i = 1/4 { // specifying loops for time periods
-		local xlsrow = 1 + `i' + 4*(`j'-1)
-		putexcel A`xlsrow' = "Group `j'" B`xlsrow' = "Period `i'"
-		putexcel C`xlsrow' = avgG`j'P`i'[1,1] D`xlsrow' = avgG`j'P`i'[2,1] E`xlsrow' = avgG`j'P`i'[1,2] F`xlsrow' = avgG`j'P`i'[2,2] G`xlsrow' = avgG`j'P`i'[10,1] 
-	}
-}
+putexcel A1=matrix(AvgResults), names
 
 
 *** Part 2: Panel Analysis, using non-Averaged Values ****
 
+* first, let's create a matrix to store all the relevant regression outputs
+mat RegResults = J(12,7,.)
+mat rownames RegResults = g1p1 g1p2 g1p3 g1p4 g2p1 g2p2 g2p3 g2p4 g3p1 g3p2 g3p3 g3p4
+mat colnames RegResults = "Country Group" "Time Period" "Savings Coefficient" "Savings s.e." "Constant Coefficient" "Constant s.e." "R-squared"
+matlist RegResults
+
+* now, let's run a loop for each country group and time period combination, putting relevant regression outputs into our results matrix
 encode country, gen(countrycode)
 xtset countrycode year
 
 forvalues j = 1/3{ // specifying loops for country groups
 	forvalues i = 1/4 { // specifying loops for time periods
+		local row = `i' + 4*(`j'-1)
 		preserve
 			keep if group`j' == 1
 			keep if period`i' == 1
 			xtreg investment savings
-			mat regG`j'P`i' = r(table)\ (e(r2_o),0)
+			mat R = r(table)
+			mat RegResults[`row',1] = `j' // country group
+			mat RegResults[`row',2] = `i' // time period
+			mat RegResults[`row',3] = R[1,1] // savings coef
+			mat RegResults[`row',4] = R[2,1] // savings s.e.
+			mat RegResults[`row',5] = R[1,2] // constant coef
+			mat RegResults[`row',6] = R[2,2] // constant s.e.
+			mat RegResults[`row',7] = e(r2_o) // r-squared
 		restore
 	}
 }
 
-* now let's put our results in an excel *
 
+* now let's put our results in an excel
 putexcel set "Data Output\FHcoefficients.xls", sheet("Panel") modify
-putexcel A1 = "Country Group" B1 = "Time Period" C1 = "Savings Coefficient" D1 = "Savings s.e." E1 = "Constant Coefficient" ///
-	F1 = "Constant s.e." G1 = "R-squared"
+putexcel A1=matrix(RegResults), names
 
-forvalues j = 1/3{ // specifying loops for country groups
-	forvalues i = 1/4 { // specifying loops for time periods
-		local xlsrow = 1 + `i' + 4*(`j'-1)
-		putexcel A`xlsrow' = "Group `j'" B`xlsrow' = "Period `i'"
-		putexcel C`xlsrow' = regG`j'P`i'[1,1] D`xlsrow' = regG`j'P`i'[2,1] E`xlsrow' = regG`j'P`i'[1,2] F`xlsrow' = regG`j'P`i'[2,2] G`xlsrow' = regG`j'P`i'[10,1] 
-	}
-}
 
